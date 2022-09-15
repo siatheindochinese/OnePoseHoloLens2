@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+option csharp_namespace = "ultraTrackingService";
+
+package ultraTrackingService;
+
+service VTService {
+  rpc StreamBytesVideo (stream VTByteRequest) returns (stream PoseData);
+  rpc OneWay (VTByteRequest) returns (PoseData);
+}
+
+message VTByteRequest {
+  bytes ImageData = 1;
+  string timeStamp = 2;
+  string cameraID = 3;
+  string Matrix = 4;
+  string Refine = 5;
+  string Calib = 6;
+  string Accumulate = 7;
+  string Bounding = 8;
+  string Stabilize = 9;
+  string SaveData = 10;
+}
+
+message PoseData {
+  bytes USData = 1;
+  bytes VolData = 2;
+  string PoseMat = 3;
+  string CalibMat = 4;
+  string AnchorMat = 5;
+  string MiscMsg = 6;
+  string RenderFrame = 7;
+  string RenderVol = 8;
+}
