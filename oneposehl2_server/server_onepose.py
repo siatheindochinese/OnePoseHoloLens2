@@ -55,7 +55,7 @@ class Streamer(ultra_pb2_grpc.VTServiceServicer):
 		
 		# import onepose configs, utils and files here
 		self.matching_model, self.extractor_model = load_model(cfg)
-		self.yolov5_detector = YoloV5Detector('/home/intern1/yolov5/','data/yolov5/ufcoco.pt')
+		self.yolov5_detector = YoloV5Detector(cfg.yolov5_dir, cfg.yolov5_weights_dir)
 		self.anno_dir = osp.join(cfg.sfm_model_dir, f'outputs_{cfg.network.detection}_{cfg.network.matching}', 'anno')
 		self.avg_anno_3d_path = osp.join(self.anno_dir, 'anno_3d_average.npz')
 		self.clt_anno_3d_path = osp.join(self.anno_dir, 'anno_3d_collect.npz')
@@ -75,6 +75,49 @@ class Streamer(ultra_pb2_grpc.VTServiceServicer):
 		self.init = False
 		self.previous_frame_pose = np.eye(4)
 		self.previous_inliers = []
+	
+	##############################################
+	# Utility function to be used in OneWay(...) #
+	# Detects desired object                     #
+	##############################################
+	@torch.no_grad()
+	@hydra.main(config_path='configs/', config_name='config.yaml')
+	def detect_object(self, inp):
+		if self.init == False:
+			bbox, inp_crop, K_crop = yolov5_detector.detect(inp, self.K_full)
+			self.init = True
+		else:
+			if len(self.previous_inliers) < 8:
+				bbox, inp_crop, K_crop = yolov5_detector.detect(inp, self.K_full)'
+			else:
+				bbox, inp_crop, K_crop = yolov5_detector.previous_pose_detect(inp, self.K_full, self.previous_frame_pose, self.bbox3d)
+		
+		object_detected = not (bbox == np.array([0, 0, 640, 480])).all()
+		return object_detected, bbox, inp_crop, K_crop
+		
+	##############################################
+	# Utility function to be used in OneWay(...) #
+	# Passes input through OnePose pipeline      #
+	##############################################
+	@torch.no_grad()
+	@hydra.main(config_path='configs/', config_name='config.yaml')
+	def oneposeFwdPass(self, inp_crop, K_crop):
+		inp_crop_cuda = torch.from_numpy(inp_crop.astype(np.float32)[None][None]/255.).cuda()
+		pred_detection = self.extractor_model(inp_crop_cuda)
+		pred_detection = {k: v[0].cpu().numpy() for k, v in pred_detection.items()}
+		inp_data = pack_data(avg_descriptors3d, clt_descriptors, keypoints3d, pred_detection, np.array([640,480]))
+		pred, _ = self.matching_model(inp_data)
+		matches = pred['matches0'].detach().cpu().numpy()
+		valid = matches > -1
+		notvalid = matches <= -1
+		kpts2d = pred_detection['keypoints']
+		kpts3d = inp_data['keypoints3d'][0].detach().cpu().numpy()
+		confidence = pred['matching_scores0'].detach().cpu().numpy()
+		mkpts2d, mkpts3d, mconf = kpts2d[valid], kpts3d[matches[valid]], confidence[valid]
+		validcorners = mkpts2d
+		notvalidcorners = kpts2d[notvalid]
+		_, pose_pred_homo, inliers = eval_utils.ransac_PnP(K_crop, mkpts2d, mkpts3d, scale=1000)
+		return pose_pred_homo, inliers, validcorners, notvalidcorners
 
 	@torch.no_grad()
 	@hydra.main(config_path='configs/', config_name='config.yaml')
@@ -104,41 +147,23 @@ class Streamer(ultra_pb2_grpc.VTServiceServicer):
 		LF2World = np.array(LF2World.split(",")[:-1]).astype(float).reshape(4,4).transpose()
 		
 		# onepose processing
-		#	object detection
-		if self.init == False:
-			bbox, inp_crop, K_crop = self.yolov5_detector.detect(inp, self.K_full)
-			self.init == True
-		else:
-			if len(self.previous_inliers) < 8:
-				bbox, inp_crop, K_crop = self.yolov5_detector.detect(inp, self.K_full)
-			else:
-				bbox, inp_crop, K_crop = self.yolov5_detector.previous_pose_detect(inp, self.K_full, self.previous_frame_pose, self.bbox3d)
+		##### object detection
+		object_detected, bbox, inp_crop, K_crop, init = self.detect_object(inp)
 		
-		#	determine if object is detected
-		object_detected = not (bbox == np.array([0, 0, 640, 480])).all()
-		
-		#	pass through onepose pipeline if object detected and return pose
-		#	else, just reset the previous pose and inliers and return null_pose
+		##### onepose pipeline
 		if object_detected:
-			inp_crop_cuda = (torch.from_numpy(inp_crop).astype(np.float32))[None][None]/ 255.).cuda()
-			pred_detection = self.extractor_model(inp_crop_cuda)
-			pred_detection = {k: v[0].cpu().numpy() for k, v in pred_detection.items()}
-			inp_data = pack_data(avg_descriptors3d, clt_descriptors, keypoints3d, pred_detection, np.array([640,480]))
-			pred, _ = matching_model(inp_data)
-			matches = pred['matches0'].detach().cpu().numpy()
-			valid = matches > -1
-			kpts2d = pred_detection['keypoints']
-			kpts3d = inp_data['keypoints3d'][0].detach().cpu().numpy()
-			confidence = pred['matching_scores0'].detach().cpu().numpy()
-			mkpts2d, mkpts3d, mconf = kpts2d[valid], kpts3d[matches[valid]], confidence[valid]
-			pose_pred, pose_pred_homo, inliers = eval_utils.ransac_PnP(K_crop, mkpts2d, mkpts3d, scale=1000)
+			pose_pred_homo, inliers, validcorners, notvalidcorners = self.onePoseForwardPass(inp_crop, K_crop)
 			self.previous_frame_pose = pose_pred_homo
 			self.previous_inliers = inliers
-			result = pose_pred_homo
-			result = result @ LF2World
 		else:
 			self.previous_frame_pose = np.eye(4)
 			self.previous_inliers = []
+		
+		##### export results
+		if object_detected and not np.array_equal(pose_pred_homo, np.eye(4)):
+			result = pose_pred_homo
+			result @ LF2World
+		else:
 			result = "null_pose"
 		
 		USData = b'\x01'
@@ -158,6 +183,8 @@ class Streamer(ultra_pb2_grpc.VTServiceServicer):
 								  RenderVol=RenderVol,
 								  MiscMsg=MiscMsgData)            
 
+@torch.no_grad()
+@hydra.main(config_path='configs/', config_name='config.yaml')
 def serve(qm):
 	server = grpc.server(futures.ThreadPoolExecutor(max_workers=20))
 	
