@@ -7,7 +7,7 @@ HoloLens Client-Server for OnePose Inferencing.
 OnePose, implemented for HoloLens visualization pipeline.
 
 
-![demo_vid](assets/realtimebysia.gif)
+![demo_vid](assets/stereo_both.gif)
 
 ## Installation
 - tbc
