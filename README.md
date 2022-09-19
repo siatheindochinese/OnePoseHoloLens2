@@ -12,4 +12,4 @@ OnePose, implemented for HoloLens visualization pipeline.
 - tbc
 
 ## Acknowledgement
-This repository uses work from YoloV5 and OnePose.
+This repository uses work from [YoloV5](https://github.com/ultralytics/yolov5) and [OnePose](https://github.com/zju3dv/OnePose).
