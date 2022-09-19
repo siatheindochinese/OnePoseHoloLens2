@@ -69,7 +69,7 @@ class Streamer(ultra_pb2_grpc.VTServiceServicer):
 		self.num_3d = self.keypoints3d.shape[0]
 		self.avg_descriptors3d, _ = data_utils.pad_features3d_random(self.avg_data['descriptors3d'], self.avg_data['scores3d'], self.num_3d)
 		self.clt_descriptors, _ = data_utils.build_features3d_leaves(self.clt_data['descriptors3d'], self.clt_data['scores3d'], self.idxs, self.num_3d, self.num_leaf)
-		self.K_full = np.loadtxt('intrin_LF.txt') # might wanna put this in hydra config instead
+		self.K_full = np.loadtxt(cfg.intrin)
 		
 		# some OneWay flags
 		self.init = False
