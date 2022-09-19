@@ -88,7 +88,7 @@ class Streamer(ultra_pb2_grpc.VTServiceServicer):
 			self.init = True
 		else:
 			if len(self.previous_inliers) < 8:
-				bbox, inp_crop, K_crop = yolov5_detector.detect(inp, self.K_full)'
+				bbox, inp_crop, K_crop = yolov5_detector.detect(inp, self.K_full)
 			else:
 				bbox, inp_crop, K_crop = yolov5_detector.previous_pose_detect(inp, self.K_full, self.previous_frame_pose, self.bbox3d)
 		
