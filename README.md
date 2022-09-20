@@ -11,5 +11,11 @@ OnePose, implemented for HoloLens visualization pipeline.
 ## Installation
 - tbc
 
+## To-Do List
+- Fix camera coordinate format
+- Create custom HoloLens Unity Client
+- Create server for stereo processing
+- Collect Performance Metrics (Late Stage Dev)
+
 ## Acknowledgement
 This repository uses work from [YoloV5](https://github.com/ultralytics/yolov5) and [OnePose](https://github.com/zju3dv/OnePose).
