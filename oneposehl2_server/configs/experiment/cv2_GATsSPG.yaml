@@ -29,3 +29,9 @@ yolov5_weights_dir: data/yolov5/ufcoco.pt
 output:
     vis_dir: ${work_dir}/runs/vis/GATsSPG
     eval_dir: ${work_dir}/runs/eval/GATsSPG
+    
+probe: m0
+anchor: m1
+calib: calib1
+device: NUHS-HOLO1
+markerdict: DICT_4X4_50
