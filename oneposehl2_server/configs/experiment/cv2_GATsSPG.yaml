@@ -22,7 +22,7 @@ object: ufcoco
 sfm_model_dir: ${data_dir}/sfm_model/${object}-box
 box3d_path: ${data_dir}/onepose_datasets/test_data/${object}-box/box3d_corners.txt
 sfm_ws_dir: ${data_dir}/sfm_model/${object}-box/outputs_superpoint_superglue/sfm_ws/model
-intrin: device_params/NUHS-HOLO1/intrin_LF.txt
+intrin: device_params/NUHS-HOLO3/intrin_PV.txt
 yolov5_dir: /home/intern1/yolov5/
 yolov5_weights_dir: data/yolov5/ufcoco.pt
 
